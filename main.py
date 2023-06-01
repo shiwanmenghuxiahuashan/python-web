@@ -1,4 +1,4 @@
-from fastapi import FastAPI,Query,Path
+from fastapi import FastAPI,Query,Path,Cookie,Header,Form, File, UploadFile
 from typing import Union,List,Set
 from pydantic import BaseModel
 
@@ -8,20 +8,12 @@ class Item(BaseModel):
         Item model
         name:商品名称
     """
-    name: str
+    item_id:str
+    name: str=""
     description: Union[str, None] = None
-    price: float
+    price: float=0.0
     tax: Union[float, None] = None
 
-object={
-    "name": "李重楼",
-    "description": "小数描述",
-    "price": 12.23,
-    "tax": 1.23
-}
-
-print(list(object))
-print(dict(object))
 
 app = FastAPI()
 
@@ -34,21 +26,32 @@ fake_items_db = [{"item_name": "Foo"}, {
 async def root():
     return {"message": "Hello World"}
 
-
-@app.get("/item/{path_param}")
+# response_model_exclude_unset 会忽略默认值
+@app.get("/item/{path_param}", response_model=Item, response_model_exclude_unset=True)
 async def path_param(
     path_param:int= Path(title="The ID of the item to get",default=...),
-    q: Union[str, None] = Query(default=None,min_length=3, max_length=5)
+    q: Union[str, None] = Query(default=None,min_length=0, max_length=1)
 ):
-    results = {"items": [{"item_id": "Foo"}, {"item_id": "Bar"}],"path_param": path_param}
+    items= [{"item_id": "Foo"}, {"item_id": "Bar"},{"item_id": "3"}]
+    results = {**items[path_param],"path_param": path_param}
     if (q):
         results.update({"q": q})
     return results
 
-
+# Header 参数 查询参数
 @app.get("/items/")
-async def query_param(is_required: bool, skip: int = 0, limit: int = 10):
-    return {"list": fake_items_db[skip: skip + limit], "is_required": is_required}
+async def query_param(
+    is_required: bool,
+    skip: int = 0,
+    limit: int = 10,
+    user_agent:Union[str,None]=Header(default=None)
+    ):
+    
+    return {
+        "user_agent":user_agent,
+        "list": fake_items_db[skip: skip + limit], 
+        "is_required": is_required
+    }
 
 @app.post("/items/")
 async def create_item(item: Item):
@@ -59,13 +62,15 @@ async def create_item(item: Item):
     print(item_dict)
     return item
 
-@app.patch("/item/{item_id}")
+# 响应模型 response_model 会限制返回值，item_id 会被忽略
+@app.patch("/item/{item_id}",response_model=Item)
 async def create_item(item_id:int,item: Item):
     return {"item_id": item_id, **item.dict()}
 
-@app.get('/shop')
-async def get_shopping_list():
-    return {"message": "Hello World"}
+
+
+# -----------------------------------------------------------
+
 
 
 class Image(BaseModel):
@@ -81,6 +86,9 @@ class Goods(BaseModel):
     place:List[str]=[],
     img: Union[List[Image], None] = None
     
+@app.get('/shop')
+async def get_shopping_list():
+    return {"message": "Hello World"}
 
 @app.post('/shop/goods')
 async def add_goods(goods:Goods):
@@ -88,8 +96,9 @@ async def add_goods(goods:Goods):
     return {"goods": goods}
 
 @app.get('/shop/goods/images')
-async def get_goods_images():
+async def get_goods_images(ads_id:Union[str,None]=Cookie(default=None)):
     return [
+            {"ads_id":ads_id},
             {
                 "name": "顶视图",
                 "url": "top-img.png"
@@ -107,4 +116,16 @@ async def get_goods_images(goods_id:int):
                 "name": "顶视图",
                 "url": "top-img.png"
             }
+
+
+@app.post('/shop/login')
+async def login(username: str = Form(), password: str = Form()):
+    return {
+            "username":username,
+            "password": password,
+            }
+
+@app.post('/shop/files')
+async def create_upload_file(file:UploadFile):
+   return {"filename": file.filename}
 
